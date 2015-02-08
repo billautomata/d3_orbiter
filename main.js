@@ -1,9 +1,12 @@
 console.log('start')
 
-
+var n_to_check = 4
+var n_steps = 12
+var gravity_multi = 200000
 
 var svg = d3.select('body').append('svg')
 var g_parent
+var g_scale_parent
 
 svg.attr('width', window.innerWidth)
 svg.attr('height', window.innerHeight)
@@ -41,14 +44,17 @@ function setup(){
     mass: Math.abs(random() * 20) + 10
   }
 
-
   g_parent = svg.append('g')
     .attr('transform', 'translate('+(window.innerWidth*0.5)+','+(window.innerHeight*0.5)+')')
+
+
+  g_scale_parent = g_parent.append('g')
+    .attr('transform', 'scale(0.5, 0.5)')
 
   // create planets
   planets.forEach(function(planet){
 
-    var g_local = g_parent.append('g')
+    var g_local = g_scale_parent.append('g')
       .attr('transform', 'translate('+(planet.pos.x)+','+(planet.pos.y)+')')
 
     g_local.append('line')
@@ -69,22 +75,34 @@ function setup(){
   })
 
   // create ship
-  var g_ship_parent = g_parent.append('g')
+  var g_ship_parent = g_scale_parent.append('g')
     .attr('transform', 'translate('+(ship.pos.x)+','+(ship.pos.y)+')')
 
-  g_ship_parent.append('line')
-    .attr('x0',0).attr('y0',0)
-    .attr('x1',0).attr('y1',0)
-    .attr('fill', 'none')
-    .attr('stroke', 'green')
-    .attr('stroke-width', 10)
-    .attr('stroke-opacity', 0.3)
+    g_ship_parent.append('path').attr('stroke', 'orange')
+      .attr('id', 'main')
+      .attr('fill', 'none')
+      .attr('stroke-width', 10)
+      .attr('stroke-opacity', 0.3)
 
-  g_ship_parent.append('path').attr('stroke', 'orange')
-    .attr('fill', 'none')
-    .attr('stroke-width', 10)
-    .attr('stroke-opacity', 0.3)
 
+    for(var i = 0; i < n_to_check; i++){
+
+      g_ship_parent.append('path').attr('stroke', 'red')
+        .attr('id', '_id'+i)
+        .attr('fill', 'none')
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.3)
+
+
+    }
+
+    g_ship_parent.append('line')
+      .attr('x0',0).attr('y0',0)
+      .attr('x1',0).attr('y1',0)
+      .attr('fill', 'none')
+      .attr('stroke', 'green')
+      .attr('stroke-width', 10)
+      .attr('stroke-opacity', 1)
 
   var circle_ship = g_ship_parent.append('circle')
     .attr('cx', 0)
@@ -101,12 +119,26 @@ function setup(){
 
 function tick(){
 
+  predict_future()
+
+
   var force = new toxi.geom.Vec2D()
 
   planets.forEach(function(planet){
 
+
+
     // console.log(ship.pos)
     var distance = planet.pos.distanceTo(ship.pos)
+
+
+
+    if(distance < planet.mass*2.0){
+      if(planet.found !== true){
+        planet.found = true
+        planet.element.select('circle').attr('fill', 'green')
+      }
+    }
     // console.log(distance, planet.pos.distanceTo(new toxi.geom.Vec2D()))
 
 
@@ -114,7 +146,7 @@ function tick(){
     this_force.x -= ship.pos.x
     this_force.y -= ship.pos.y
 
-    this_force.normalizeTo((-planet.mass*10000)/(distance*distance))
+    this_force.normalizeTo((-planet.mass*gravity_multi)/(distance*distance))
 
     force.x += this_force.x
     force.y += this_force.y
@@ -130,14 +162,16 @@ function tick(){
   ship.vel.x -= force.x
   ship.vel.y -= force.y
 
+  // ship.vel.x *= 0.999
+  // ship.vel.y *= 0.999
+
   ship.pos.addSelf(ship.vel)
   ship.element.attr('transform', 'translate('+(ship.pos.x)+','+(ship.pos.y)+')')
   ship.element.select('line').attr('x1', ship.vel.x*5).attr('y1',ship.vel.y*5)
 
+  ship.element.select('path#main').attr('d', line(step_particles(n_steps*2,false).positions))
 
-  ship.element.select('path').attr('d', line(step_particles(30).positions))
-
-  g_parent.attr('transform', 'translate('+(window.innerWidth*0.5-ship.pos.x)+','+(window.innerHeight*0.5-ship.pos.y)+') ')
+  // g_parent.attr('transform', 'translate('+(window.innerWidth*0.5-ship.pos.x)+','+(window.innerHeight*0.5-ship.pos.y)+') ')
 
 
 
@@ -152,20 +186,48 @@ tick()
 function predict_future(){
 
 
-  var n_steps = 12
 
 
+
+  var best_score = Number.MAX_VALUE
+  var best_ship
+
+  for(var i = 0; i < n_to_check; i++){
+
+    var check_ship = step_particles(n_steps)
+
+    if(check_ship.score < best_score){
+      best_ship = check_ship
+      best_score = check_ship.score
+    }
+
+    ship.element.select('path#_id'+i).attr('d', line(check_ship.positions))
+
+  }
+
+  // console.log(best_score, best_ship.vel_bump)
+  ship.vel.x += best_ship.vel_bump.x
+  ship.vel.y += best_ship.vel_bump.y
 
 
 }
 
 
-function step_particles(n){
+function step_particles(n, dobump){
+
+  var bump_size = 0.8
 
   var temp_ship = {
     pos: new toxi.geom.Vec2D(ship.pos.x, ship.pos.y),
     vel: new toxi.geom.Vec2D(ship.vel.x, ship.vel.y),
-    positions: [new toxi.geom.Vec2D()]
+    vel_bump: new toxi.geom.Vec2D(random()*bump_size,random()*bump_size),
+    positions: [new toxi.geom.Vec2D()],
+    score: 0
+  }
+
+  if(dobump !== false){
+    temp_ship.vel.x += temp_ship.vel_bump.x
+    temp_ship.vel.y += temp_ship.vel_bump.y
   }
 
   for(var i = 0; i < n; i++){
@@ -176,6 +238,24 @@ function step_particles(n){
 
       // console.log(ship.pos)
       var distance = planet.pos.distanceTo(ship.pos)
+
+
+
+      if(distance < planet.mass){
+        temp_ship.score = Number.MAX_VALUE*0.5
+      } else {
+        temp_ship.score+= distance
+        if(planet.found !== true){
+          temp_ship.score += distance*distance
+        }
+
+        if(distance < planet.mass*2.0){
+          //temp_ship.score = -1000
+        }
+
+      }
+
+
       // console.log(distance, planet.pos.distanceTo(new toxi.geom.Vec2D()))
 
 
@@ -183,7 +263,7 @@ function step_particles(n){
       this_force.x -= ship.pos.x
       this_force.y -= ship.pos.y
 
-      this_force.normalizeTo((-planet.mass*10000)/(distance*distance))
+      this_force.normalizeTo((-planet.mass*gravity_multi)/(distance*distance))
 
       force.x += this_force.x
       force.y += this_force.y
