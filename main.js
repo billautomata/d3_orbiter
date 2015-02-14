@@ -1,12 +1,13 @@
 console.log('start')
 
 var n_to_check = 4
-var n_steps = 12
-var gravity_multi = 200000
+var n_steps = 32
+var gravity_multi = 1000
 
 var svg = d3.select('body').append('svg')
 var g_parent
 var g_scale_parent
+var g_ship_stats
 
 svg.attr('width', window.innerWidth)
 svg.attr('height', window.innerHeight)
@@ -17,7 +18,7 @@ var velocity_scale = d3.scale.linear().domain([1,25]).range([1,0.5]).clamp(true)
 
 var random = d3.random.normal(0)
 
-var n_planets = 12
+var n_planets = 6
 var planets = []
 var ship
 
@@ -40,7 +41,7 @@ function setup(){
 
   ship = {
     pos: new toxi.geom.Vec2D(random()*100, random()*100),
-    vel: new toxi.geom.Vec2D(0, 0),
+    vel: new toxi.geom.Vec2D(random() * 10, random() * 10),
     mass: Math.abs(random() * 20) + 10
   }
 
@@ -81,8 +82,8 @@ function setup(){
     g_ship_parent.append('path').attr('stroke', 'orange')
       .attr('id', 'main')
       .attr('fill', 'none')
-      .attr('stroke-width', 10)
-      .attr('stroke-opacity', 0.3)
+      .attr('stroke-width', 1)
+      .attr('stroke-opacity', 1)
 
 
     for(var i = 0; i < n_to_check; i++){
@@ -112,10 +113,16 @@ function setup(){
 
   ship.element = g_ship_parent
 
+
+  // debug views
+  g_ship_stats = svg.append('g').attr('transform', 'translate(10,10)')
+  g_ship_stats.append('text').attr('id','vx').text('vel stats')
+  g_ship_stats.append('text')
+    .attr('transform', 'translate(0,20)')
+  .attr('id','vy').text('vel stats')
+
+
 }
-
-
-// create ship
 
 function tick(){
 
@@ -125,8 +132,6 @@ function tick(){
   var force = new toxi.geom.Vec2D()
 
   planets.forEach(function(planet){
-
-
 
     // console.log(ship.pos)
     var distance = planet.pos.distanceTo(ship.pos)
@@ -157,13 +162,19 @@ function tick(){
 
   })
 
-  force.normalizeTo(1)
+  //force.normalizeTo(10)
+  var limit = 10
+  if(Math.abs(force.x) > limit || Math.abs(force.y) > limit){
+    console.log('here')
+    force.x = force.y = 0
+  }
 
   ship.vel.x -= force.x
   ship.vel.y -= force.y
 
-  // ship.vel.x *= 0.999
-  // ship.vel.y *= 0.999
+  var damping = 1.00
+  ship.vel.x *= damping
+  ship.vel.y *= damping
 
   ship.pos.addSelf(ship.vel)
   ship.element.attr('transform', 'translate('+(ship.pos.x)+','+(ship.pos.y)+')')
@@ -173,6 +184,8 @@ function tick(){
 
   // g_parent.attr('transform', 'translate('+(window.innerWidth*0.5-ship.pos.x)+','+(window.innerHeight*0.5-ship.pos.y)+') ')
 
+  g_ship_stats.select('text#vx').html(ship.vel.x.toFixed(1))
+  g_ship_stats.select('text#vy').html(ship.vel.y.toFixed(1))
 
 
 
@@ -184,10 +197,6 @@ setup()
 tick()
 
 function predict_future(){
-
-
-
-
 
   var best_score = Number.MAX_VALUE
   var best_ship
@@ -205,7 +214,7 @@ function predict_future(){
 
   }
 
-  // console.log(best_score, best_ship.vel_bump)
+  //console.log(best_score, best_ship.vel_bump)
   ship.vel.x += best_ship.vel_bump.x
   ship.vel.y += best_ship.vel_bump.y
 
@@ -215,7 +224,7 @@ function predict_future(){
 
 function step_particles(n, dobump){
 
-  var bump_size = 0.8
+  var bump_size = 0.5
 
   var temp_ship = {
     pos: new toxi.geom.Vec2D(ship.pos.x, ship.pos.y),
@@ -269,12 +278,12 @@ function step_particles(n, dobump){
       force.y += this_force.y
 
       planet.element.select('line')
-        .attr('x1', this_force.x)
-        .attr('y1', this_force.y)
+        .attr('x1', this_force.x * 100)
+        .attr('y1', this_force.y * 100)
 
     })
 
-    force.normalizeTo(1)
+    //force.normalizeTo(1)
 
     temp_ship.vel.x -= force.x
     temp_ship.vel.y -= force.y
